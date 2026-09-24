@@ -6,14 +6,20 @@ import {
   Trash2,
   GraduationCap,
   Mail,
-  BookOpen,
   User,
   X,
   Loader2,
   AlertCircle,
   Users,
+  BookOpen,
+  Server,
+  Database,
+  ArrowRight,
+  Globe,
+  Code,
+  CheckCircle2,
 } from 'lucide-react';
-import { supabase, type Aluno, type AlunoInput } from '@/lib/supabase';
+import { api, type Aluno, type ApiInfo } from '@/lib/api';
 
 type AlunoFormData = {
   nome: string;
@@ -31,6 +37,7 @@ const emptyForm: AlunoFormData = {
 
 export default function App() {
   const [alunos, setAlunos] = useState<Aluno[]>([]);
+  const [apiInfo, setApiInfo] = useState<ApiInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -42,23 +49,22 @@ export default function App() {
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showApiPanel, setShowApiPanel] = useState(false);
 
   const fetchAlunos = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error } = await supabase
-      .from('alunos')
-      .select('*')
-      .order('id', { ascending: true });
-    if (error) {
+    try {
+      const data = await api.listAlunos();
+      setAlunos(data);
+    } catch {
       setError('Não foi possível carregar os alunos.');
-    } else {
-      setAlunos(data as Aluno[]);
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
+    api.getInfo().then(setApiInfo).catch(() => {});
     fetchAlunos();
   }, [fetchAlunos]);
 
@@ -120,7 +126,7 @@ export default function App() {
       return;
     }
 
-    const payload: AlunoInput = {
+    const payload = {
       nome: form.nome.trim(),
       email: form.email.trim(),
       curso: form.curso.trim(),
@@ -128,58 +134,128 @@ export default function App() {
     };
 
     setSaving(true);
-    if (editingId !== null) {
-      const { error } = await supabase
-        .from('alunos')
-        .update(payload)
-        .eq('id', editingId);
-      if (error) {
-        setFormError('Erro ao atualizar o aluno.');
-        setSaving(false);
-        return;
+    try {
+      if (editingId !== null) {
+        await api.updateAluno(editingId, payload);
+      } else {
+        await api.createAluno(payload);
       }
-    } else {
-      const { error } = await supabase.from('alunos').insert(payload);
-      if (error) {
-        setFormError('Erro ao cadastrar o aluno.');
-        setSaving(false);
-        return;
-      }
+      closeModal();
+      await fetchAlunos();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Erro ao salvar o aluno.');
     }
     setSaving(false);
-    closeModal();
-    await fetchAlunos();
   };
 
   const confirmDelete = async () => {
     if (deleteId === null) return;
     setDeleting(true);
-    const { error } = await supabase.from('alunos').delete().eq('id', deleteId);
-    setDeleting(false);
-    if (error) {
-      setError('Erro ao excluir o aluno.');
-    } else {
+    try {
+      await api.deleteAluno(deleteId);
       setDeleteId(null);
       await fetchAlunos();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao excluir o aluno.');
     }
+    setDeleting(false);
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <header className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm">
-            <GraduationCap className="w-6 h-6 text-white" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm">
+              <GraduationCap className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Escola — Gestão de Alunos</h1>
+              <p className="text-sm text-slate-500">API CRUD completa para cadastro de estudantes</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Escola — Gestão de Alunos</h1>
-            <p className="text-sm text-slate-500">Cadastro, consulta e gerenciamento de estudantes</p>
-          </div>
+          <button
+            onClick={() => setShowApiPanel(!showApiPanel)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-100 transition"
+          >
+            <Server className="w-4 h-4" />
+            <span className="hidden sm:inline">API</span>
+          </button>
         </div>
       </header>
 
+      {/* API Info Banner */}
+      {apiInfo && (
+        <div className="bg-emerald-600">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-2 text-sm text-white overflow-x-auto whitespace-nowrap">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            <span className="font-medium">{apiInfo.sistema}</span>
+            <span className="opacity-70">·</span>
+            <span>v{apiInfo.versao}</span>
+            <span className="opacity-70">·</span>
+            <span>{apiInfo.instituicao}</span>
+            <span className="opacity-70">·</span>
+            <span>{apiInfo.curso}</span>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+        {/* API Explorer Panel */}
+        {showApiPanel && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2">
+                <Server className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-base font-semibold text-slate-900">Explorador da API</h2>
+              </div>
+              <button
+                onClick={() => setShowApiPanel(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Data Flow Diagram */}
+            <div className="mb-6 p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                Fluxo da Informação
+              </p>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <FlowStep icon={<Database className="w-4 h-4" />} label="Banco de Dados" sub="Postgres" color="bg-blue-100 text-blue-700" />
+                <ArrowRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                <FlowStep icon={<Code className="w-4 h-4" />} label="SQL" sub="SELECT / INSERT / UPDATE / DELETE" color="bg-violet-100 text-violet-700" />
+                <ArrowRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                <FlowStep icon={<Server className="w-4 h-4" />} label="API (Edge Function)" sub="Node.js / Deno" color="bg-emerald-100 text-emerald-700" />
+                <ArrowRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                <FlowStep icon={<Code className="w-4 h-4" />} label="JSON" sub="Resposta HTTP" color="bg-amber-100 text-amber-700" />
+                <ArrowRight className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                <FlowStep icon={<Globe className="w-4 h-4" />} label="Navegador" sub="Interface" color="bg-rose-100 text-rose-700" />
+              </div>
+            </div>
+
+            {/* Routes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {apiInfo?.rotas.map((rota, i) => (
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-white">
+                  <RouteBadge route={rota} />
+                </div>
+              ))}
+            </div>
+
+            {/* Status codes */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <StatusBadge code="200" label="Consulta / Alteração" />
+              <StatusBadge code="201" label="Cadastro" />
+              <StatusBadge code="204" label="Exclusão" />
+              <StatusBadge code="404" label="Não encontrado" />
+              <StatusBadge code="500" label="Erro interno" />
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <StatCard
@@ -518,6 +594,57 @@ function Field({
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {children}
+    </div>
+  );
+}
+
+function FlowStep({
+  icon,
+  label,
+  sub,
+  color,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 flex-shrink-0">
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-slate-900 whitespace-nowrap">{label}</p>
+        <p className="text-[10px] text-slate-500 whitespace-nowrap">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+function RouteBadge({ route }: { route: string }) {
+  const method = route.trim().split(/\s+/)[0];
+  const methodColors: Record<string, string> = {
+    GET: 'bg-blue-100 text-blue-700 border-blue-200',
+    POST: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    PUT: 'bg-amber-100 text-amber-700 border-amber-200',
+    DELETE: 'bg-red-100 text-red-700 border-red-200',
+  };
+  return (
+    <>
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-bold border ${methodColors[method] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+        {method}
+      </span>
+      <span className="text-sm text-slate-700 font-mono">{route.replace(method, '').trim()}</span>
+    </>
+  );
+}
+
+function StatusBadge({ code, label }: { code: string; label: string }) {
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200">
+      <span className="text-xs font-mono font-bold text-slate-700">{code}</span>
+      <span className="text-xs text-slate-500">{label}</span>
     </div>
   );
 }
