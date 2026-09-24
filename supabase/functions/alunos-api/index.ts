@@ -66,8 +66,9 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const path = url.pathname;
 
-  // Strip the /functions/v1/alunos-api prefix to get the logical route
-  const route = path.replace(/^\/functions\/v1\/alunos-api/, "");
+  // Strip the edge function path prefix to get the logical route.
+  // Supabase may provide the path as /functions/v1/alunos-api/... or /alunos-api/...
+  const route = path.replace(/^\/(functions\/v1\/)?alunos-api/, "");
 
   try {
     // GET / or /info — API info (Exercise 2: the "server.js" welcome message)
